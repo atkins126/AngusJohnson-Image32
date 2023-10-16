@@ -13,9 +13,9 @@ unit Img32.Panels;
 interface
 
 uses
-  SysUtils, Classes, Windows, Messages, Types, Graphics,
+  Windows, SysUtils, Classes, Messages, Types, Graphics,
   Controls, Forms, ExtCtrls, Themes, uxTheme, Math, ShellApi, ClipBrd,
-  Img32, Img32.Extra;
+  Img32;
 
 {$I Img32.inc}
 
@@ -205,6 +205,9 @@ type
 procedure Register;
 
 implementation
+
+uses
+  Img32.Extra;
 
 procedure Register;
 begin
@@ -913,7 +916,7 @@ procedure TBaseImgPanel.Paint;
   var
     tImage : TImage32;
   begin
-    tImage := TImage32.Create(rec.Width, rec.Height);
+    tImage := TImage32.Create(RectWidth(rec), RectHeight(rec));
     try
       HatchBackground(timage,
         fBkgChBrdColor1, fBkgChBrdColor2, DpiAware(fBkgChBrdSize));
