@@ -43,7 +43,8 @@ type
     procedure pnlSmoothEnter(Sender: TObject);
   private
     masterImg, workImg: TImage32;
-    rawPaths, bezierPaths, flattenedPaths: TPathsD;
+    hasTransparency: Boolean; // must be checked before resizing
+    rawPaths, bezierPaths, smoothedPaths: TPathsD;
     function GetDisplaySize: TSize;
     procedure DisplayImage;
   public
@@ -102,12 +103,14 @@ end;
 procedure TForm1.FormCreate(Sender: TObject);
 begin
   masterImg := TImage32.Create;
-  masterImg.LoadFromResource('book', 'BMP');
+  masterImg.LoadFromResource('beetle', 'PNG');
+  hasTransparency := masterImg.HasTransparency;
+  masterImg.ScaleToFit(1000,1000);
   OpenDialog1.InitialDir :=
     ExtractFilePath(paramStr(0)) + 'sample_images';
   ForceDirectories(OpenDialog1.InitialDir);
   OpenDialog1.FileName := 'book.bmp';
-  if masterImg.HasTransparency then
+  if hasTransparency then
     masterImg.CropTransparentPixels;
   workImg := TImage32.Create;
 end;
@@ -152,91 +155,86 @@ end;
 
 procedure TForm1.DisplayImage;
 var
-  i,j, len: integer;
+  i,j: integer;
   scale, simplifyTol: double;
   vectorBounds: TRect;
+  //tmpColors: TArrayOfColor32;
 begin
   rawPaths := nil;
   bezierPaths := nil;
-  flattenedPaths := nil;
+  smoothedPaths := nil;
 
+  Invalidate;
   if masterImg.IsEmpty then Exit;
+
   if mnuShowMonoImage.Checked then
   begin
     workImg.Assign(masterImg); //shows the raw image only
     with GetDisplaySize do
       workImg.ScaleToFit(cx-margin*2, cy-margin*2);
+//    // otherwise, show as a monochrome image
+//    tmpColors := GetColorMask(workImg, clBlack32, CompareRGB, $32);
+//    Move(tmpColors[0], workImg.Pixels[0], Length(tmpColors) * SizeOf(TColor32));
     StatusBar1.Panels[0].Text := '';
     StatusBar1.Panels[1].Text := ' Raw raster image';
-    Invalidate;
     Exit;
   end;
 
   with GetDisplaySize do workImg.SetSize(cx, cy);
-  simplifyTol := TrackBar2.Position * 0.5 * workImg.Width/masterImg.Width;
+  if mnuShowRawPoly.Checked then
+    simplifyTol := 0 else
+    simplifyTol := TrackBar2.Position * 0.5;
 
   // 1. Vectorize (now includes vector simplification):
   // converts simple (2 color) raster images into vector images
-  if masterImg.HasTransparency then
+  if hasTransparency then
     rawPaths := Vectorize(masterImg, $FF000000, CompareAlpha, $80, simplifyTol) else
     rawPaths := Vectorize(masterImg, $FF000000, CompareRGB, $44, simplifyTol);
-  vectorBounds := GetBounds(rawPaths);
 
-  // 1b. scale the vector image
+  vectorBounds := GetBounds(rawPaths);
+  if vectorBounds.IsEmpty then Exit;
+
+  // 1b. offset and scale the vector image
+
+  rawPaths := TranslatePath(rawPaths,
+    margin -vectorBounds.Left, margin -vectorBounds.Top);
+
   scale := Min(
     (workImg.Width - Margin*2) / RectWidth(vectorBounds),
     (workImg.Height - Margin*2) / RectHeight(vectorBounds));
   rawPaths := ScalePath(rawPaths, scale);
-  rawPaths := OffsetPath(rawPaths,
-    margin -vectorBounds.Left, margin -vectorBounds.Top);
 
   if mnuShowRawPoly.Checked then
   begin
-    flattenedPaths := rawPaths;
+    smoothedPaths := rawPaths;
     StatusBar1.Panels[0].Text := Format(' Vertices: %d', [Count(rawPaths)]);
     StatusBar1.Panels[1].Text := ' Raw Vectors (no smoothing or simplification)';
   end else
   begin
 
-    // 2. SmoothToCubicBezier and flatten result
-    // returns a bezier path, NOT a flattened path
-    if TrackBar1.Position > 0 then
-    begin
-      len := Length(rawPaths);
-      setLength(bezierPaths, len);
-      for i := 0 to len -1 do
-        bezierPaths[i] := SmoothToCubicBezier(rawPaths[i],
-          true, TrackBar1.Position);
-      // flatten beziers
-      SetLength(flattenedPaths, Length(bezierPaths));
-      for i := 0 to High(bezierPaths) do
-        flattenedPaths[i] := FlattenCBezier(bezierPaths[i]);
-    end
-    else
-      flattenedPaths := CopyPaths(rawPaths);
+    smoothedPaths := SmoothPaths(rawPaths, true, (10-TrackBar1.Position)/10, 0.25);
 
     lblSmooth.Caption :=
       Format('Smooth'#10'Amount'#10'(%d)',[TrackBar1.Position]);
     lblSimplify.Caption :=
       Format('Simplify'#10'Amount'#10'(%d)',[TrackBar2.Position]);
 
-    StatusBar1.Panels[0].Text := Format(' Vertices: %d', [Count(flattenedPaths)]);
+    StatusBar1.Panels[0].Text := Format(' Vertices: %d', [Count(smoothedPaths)]);
     StatusBar1.Panels[1].Text := ' Simplified & smoothed';
   end;
 
   if mnuHighlightVertices.Checked then
   begin
-    DrawPolygon(workImg, flattenedPaths, frEvenOdd, $20660000);
-    DrawLine(workImg, flattenedPaths, DPIAware(2), clMaroon32, esPolygon);
+    DrawPolygon(workImg, smoothedPaths, frEvenOdd, $20660000);
+    DrawLine(workImg, smoothedPaths, DPIAware(2), clMaroon32, esPolygon);
 
-    for i := 0 to High(flattenedPaths) do
-      for j := 0 to High(flattenedPaths[i]) do
-          DrawPoint(workImg, flattenedPaths[i][j], DPIAware(2.5), clNavy32);
+    for i := 0 to High(smoothedPaths) do
+      for j := 0 to High(smoothedPaths[i]) do
+          DrawPoint(workImg, smoothedPaths[i][j], DPIAware(2.5), clNavy32);
   end else
   begin
-    DrawPolygon(workImg, flattenedPaths, frEvenOdd, $FF660033);
+    DrawPolygon(workImg, smoothedPaths, frEvenOdd, $FF660033);
   end;
-  Invalidate;
 end;
 //------------------------------------------------------------------------------
 
@@ -244,6 +242,8 @@ procedure TForm1.Open1Click(Sender: TObject);
 begin
   if not OpenDialog1.Execute then Exit;
   masterImg.LoadFromFile(OpenDialog1.FileName);
+  hasTransparency := masterImg.HasTransparency;
+  masterImg.ScaleToFit(1000,1000);
   DisplayImage;
 end;
 //------------------------------------------------------------------------------
@@ -290,7 +290,7 @@ begin
 
   with TSimpleSvgWriter.Create(frEvenOdd) do
   try
-    AddPaths(flattenedPaths, false, $40000033, $FF000033, 1.2);
+    AddPaths(smoothedPaths, false, $40000033, $FF000033, 1.2);
     SaveToFile(SaveDialog1.FileName, 800,600);
   finally
     free;

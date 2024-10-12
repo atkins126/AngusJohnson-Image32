@@ -152,7 +152,7 @@ begin
   result.MasterImage.Assign(MasterImage);
   result.Angle := Angle;
   b := InnerBounds;
-  OffsetRect(b, 50,50);
+  TranslateRect(b, 50,50);
   result.SetInnerBounds(b);
 end;
 
@@ -191,7 +191,7 @@ procedure TMyVectorLayer32.Draw;
 var
   pp: TPathsD;
 begin
-  pp := OffsetPath(Paths, -Left +OuterMargin, -Top +OuterMargin);
+  pp := TranslatePath(Paths, -Left +OuterMargin, -Top +OuterMargin);
   DrawShadow(Image, pp, frEvenOdd, OuterMargin, angle45, clGray32, true);
   DrawPolygon(Image, pp, frEvenOdd, BrushColor);
   Draw3D(Image, pp, frEvenOdd, DPIAware(2.5), 2);
@@ -213,7 +213,7 @@ begin
   tmp := ScalePath(tmp, 1, 2.0);
   rec := Img32.Vector.GetBoundsD(tmp);
   with centerPt do
-    tmp := OffsetPath(tmp,
+    tmp := TranslatePath(tmp,
       X - rec.Left - rec.Width/2,
       Y -rec.Top - rec.Height/2);
   Paths := tmp;

@@ -2,10 +2,10 @@ unit Img32.Text;
 
 (*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Version   :  4.4                                                             *
-* Date      :  19 May 2023                                                     *
+* Version   :  4.6                                                             *
+* Date      :  18 September 2024                                               *
 * Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2019-2023                                         *
+* Copyright :  Angus Johnson 2019-2024                                         *
 * Purpose   :  TrueType fonts for TImage32 (without Windows dependencies)      *
 * License   :  http://www.boost.org/LICENSE_1_0.txt                            *
 *******************************************************************************)
@@ -671,11 +671,26 @@ end;
 
 function MergePathsArray(const pa: TArrayOfPathsD): TPathsD;
 var
-  i: integer;
+  i, j: integer;
+  resultCount: integer;
 begin
   Result := nil;
+
+  // Preallocate the Result-Array
+  resultCount := 0;
   for i := 0 to High(pa) do
-    AppendPath(Result, pa[i]);
+    inc(resultCount, Length(pa[i]));
+  SetLength(Result, resultCount);
+
+  resultCount := 0;
+  for i := 0 to High(pa) do
+  begin
+    for j := 0 to High(pa[i]) do
+    begin
+      Result[resultCount] := pa[i][j];
+      inc(resultCount);
+    end;
+  end;
 end;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -1925,7 +1940,7 @@ begin
           pt2 := pathsEx[i][0] else
           pt2 := pathsEx[i][j+1];
         bez := FlattenQBezier(pathsEx[i][j-1].pt, pathsEx[i][j].pt, pt2.pt);
-        AppendPath(Result[i], bez);
+        ConcatPaths(Result[i], bez);
       end;
     end;
   end;
@@ -2036,7 +2051,7 @@ begin
   end;
   GetGlyphInfo(Ord('G'),glyph, dummy, gm);
   rec := GetBoundsD(glyph);
-  glyph := Img32.Vector.OffsetPath(glyph, -rec.Left, -rec.Top);
+  glyph := Img32.Vector.TranslatePath(glyph, -rec.Left, -rec.Top);
   glyph := Img32.Vector.ScalePath(glyph,
     imgSize/rec.Width, imgSize/rec.Height);
   img := TImage32.Create(imgSize,imgSize);
@@ -2441,7 +2456,7 @@ begin
       with wordList.GetWord(j) do
         if aWord > #32 then
         begin
-          app := OffsetPath(paths, x, y + Ascent);
+          app := TranslatePath(paths, x, y + Ascent);
           pp := MergePathsArray(app);
           AppendPath(Result, pp);
           x := x + width;
@@ -2483,7 +2498,7 @@ begin
       else
         Exit;
     end;
-    Result := OffsetPath(Result, 0, dy);
+    Result := TranslatePath(Result, 0, dy);
   finally
     wl.Free;
   end;
@@ -2493,32 +2508,48 @@ end;
 function TFontCache.GetTextOutline(x, y: double; const text: UnicodeString;
   out nextX: double; underlineIdx: integer): TPathsD;
 var
-  i: integer;
+  i, j: integer;
   w, y2: double;
-  p: TPathD;
   arrayOfGlyphs: TArrayOfPathsD;
+  resultCount: integer;
 begin
   Result := nil;
   if not GetTextOutlineInternal(x, y, text,
     arrayOfGlyphs, nextX, underlineIdx) then Exit;
 
+  // pre allocate the Result array
+  resultCount := 0;
+  if fUnderlined then inc(resultCount);
+  for i := 0 to high(arrayOfGlyphs) do
+    inc(resultCount, Length(arrayOfGlyphs[i]));
+  if fStrikeOut then inc(resultCount);
+  SetLength(Result, resultCount);
+
+  resultCount := 0;
+
   if fUnderlined then
   begin
     w := LineHeight * lineFrac;
     y2 := y + 1.5 *(1+w);
-    p := Rectangle(x, y2, nextX, y2 + w);
-    AppendPath(Result, p);
+    Result[resultCount] := Rectangle(x, y2, nextX, y2 + w);
+    inc(resultCount);
   end;
 
   for i := 0 to high(arrayOfGlyphs) do
-    AppendPath(Result, arrayOfGlyphs[i]);
+  begin
+    for j := 0 to high(arrayOfGlyphs[i]) do
+    begin
+      Result[resultCount] := arrayOfGlyphs[i][j];
+      inc(resultCount);
+    end;
+  end;
 
   if fStrikeOut then
   begin
     w := LineHeight * lineFrac;
     y := y - LineHeight/4;
-    p := Rectangle(x, y , nextX, y + w);
-    AppendPath(Result, p);
+    Result[resultCount] := Rectangle(x, y , nextX, y + w);
+    //inc(ResultCount);
   end;
 end;
 //------------------------------------------------------------------------------
@@ -2552,7 +2583,7 @@ begin
       y := y + yMax  * scale; //yMax = char ascent
       dy := - yMin * scale;   //yMin = char descent
     end;
-    AppendPath(Result, Img32.Vector.OffsetPath( glyphInfo.contours, x + dx, y));
+    AppendPath(Result, TranslatePath( glyphInfo.contours, x + dx, y));
     if text[i] = #32 then
       y := y + dy - interCharSpace else
       y := y + dy + interCharSpace;
@@ -2593,7 +2624,7 @@ begin
         nextX := nextX + prevGlyphKernList[j].kernValue * fScale;
     end;
 
-    currGlyph := OffsetPath(glyphInfo.contours, nextX, y);
+    currGlyph := TranslatePath(glyphInfo.contours, nextX, y);
     dx := glyphInfo.metrics.hmtx.advanceWidth * fScale;
 
     if i = underlineIdx then
@@ -2871,9 +2902,10 @@ var
   glyphs: TPathsD;
   glyphInfo: PGlyphInfo;
   dx, dy, scale: double;
+  cr: TCustomRenderer;
 begin
   Result := y;
-  if not assigned(font) or not font.IsValidFont then Exit;
+  if not assigned(font) or not font.IsValidFont or (text = '') then Exit;
 
   xxMax := 0;
   for i := 1 to Length(text) do
@@ -2885,21 +2917,28 @@ begin
          xxMax := xMax;
   end;
 
-  scale := font.Scale;
-  for i := 1 to Length(text) do
-  begin
-    glyphInfo := font.GetCharInfo(ord(text[i]));
-    with glyphInfo.metrics.glyf do
+  if image.AntiAliased then
+    cr := TColorRenderer.Create(textColor) else
+    cr := TAliasedColorRenderer.Create(textColor);
+  try
+    scale := font.Scale;
+    for i := 1 to Length(text) do
     begin
-      dx :=  (xxMax - xMax) * 0.5 * scale;
-      y := y + yMax  * scale; //yMax = char ascent
-      dy := - yMin * scale;   //yMin = char descent
+      glyphInfo := font.GetCharInfo(ord(text[i]));
+      with glyphInfo.metrics.glyf do
+      begin
+        dx :=  (xxMax - xMax) * 0.5 * scale;
+        y := y + yMax  * scale; //yMax = char ascent
+        dy := - yMin * scale;   //yMin = char descent
+      end;
+      glyphs := TranslatePath( glyphInfo.contours, x + dx, y);
+      DrawPolygon(image, glyphs, frNonZero, cr);
+      if text[i] = #32 then
+        y := y + dy - interCharSpace else
+        y := y + dy + interCharSpace;
     end;
-    glyphs := Img32.Vector.OffsetPath( glyphInfo.contours, x + dx, y);
-    DrawPolygon(image, glyphs, frNonZero, textColor);
-    if text[i] = #32 then
-      y := y + dy - interCharSpace else
-      y := y + dy + interCharSpace;
+  finally
+    cr.Free;
   end;
   Result := y;
 end;
@@ -3012,7 +3051,7 @@ begin
     pt.X := pathInfo.pt.X + pathInfo.vector.X * dx - rotatePt.X;
     pt.Y := pathInfo.pt.Y + pathInfo.vector.Y * dx - rotatePt.Y;
 
-    tmpPaths := OffsetPath(tmpPaths, pt.X, pt.Y);
+    tmpPaths := TranslatePath(tmpPaths, pt.X, pt.Y);
     AppendPath(Result, tmpPaths);
   end;
 end;

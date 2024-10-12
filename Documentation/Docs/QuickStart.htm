@@ -6,7 +6,7 @@
 </head>
 <body bgcolor="#FFFFFF" onload="OnLoadEvent()">
   <div class="menu" id="menu" onmouseleave="OnMouseLeaveEvent()"><a class="ancestor" href="_Body.htm">Index</a><a href="./Overview.htm">Overview</a><a href="./Installation.htm">Installation</a><span class="active">QuickStart</span><span class="submenu_owner" onmouseover="onSubmenuPopup(this)"><span class="submenu_heading">Units</span>
-      <div class="submenu_background"><a href="./Units/Img32/_Body.htm">Img32</a><a href="./Units/Img32.Clipper/_Body.htm">Img32.Clipper</a><a href="./Units/Img32.CQ/_Body.htm">Img32.CQ</a><a href="./Units/Img32.Draw/_Body.htm">Img32.Draw</a><a href="./Units/Img32.Extra/_Body.htm">Img32.Extra</a><a href="./Units/Img32.Fmt.BMP/_Body.htm">Img32.Fmt.BMP</a><a href="./Units/Img32.Fmt.GIF/_Body.htm">Img32.Fmt.GIF</a><a href="./Units/Img32.Fmt.JPG/_Body.htm">Img32.Fmt.JPG</a><a href="./Units/Img32.Fmt.PNG/_Body.htm">Img32.Fmt.PNG</a><a href="./Units/Img32.Fmt.QOI/_Body.htm">Img32.Fmt.QOI</a><a href="./Units/Img32.Fmt.SVG/_Body.htm">Img32.Fmt.SVG</a><a href="./Units/Img32.FMX/_Body.htm">Img32.FMX</a><a href="./Units/Img32.Layers/_Body.htm">Img32.Layers</a><a href="./Units/Img32.Resamplers/_Body.htm">Img32.Resamplers</a><a href="./Units/Img32.Storage/_Body.htm">Img32.Storage</a><a href="./Units/Img32.SVG.Reader/_Body.htm">Img32.SVG.Reader</a><a href="./Units/Img32.Text/_Body.htm">Img32.Text</a><a href="./Units/Img32.Transform/_Body.htm">Img32.Transform</a><a href="./Units/Img32.Vector/_Body.htm">Img32.Vector</a>
+      <div class="submenu_background"><a href="./Units/Img32/_Body.htm">Img32</a><a href="./Units/Img32.Clipper2/_Body.htm">Img32.Clipper2</a><a href="./Units/Img32.CQ/_Body.htm">Img32.CQ</a><a href="./Units/Img32.Draw/_Body.htm">Img32.Draw</a><a href="./Units/Img32.Extra/_Body.htm">Img32.Extra</a><a href="./Units/Img32.Fmt.BMP/_Body.htm">Img32.Fmt.BMP</a><a href="./Units/Img32.Fmt.GIF/_Body.htm">Img32.Fmt.GIF</a><a href="./Units/Img32.Fmt.JPG/_Body.htm">Img32.Fmt.JPG</a><a href="./Units/Img32.Fmt.PNG/_Body.htm">Img32.Fmt.PNG</a><a href="./Units/Img32.Fmt.QOI/_Body.htm">Img32.Fmt.QOI</a><a href="./Units/Img32.Fmt.SVG/_Body.htm">Img32.Fmt.SVG</a><a href="./Units/Img32.FMX/_Body.htm">Img32.FMX</a><a href="./Units/Img32.Layers/_Body.htm">Img32.Layers</a><a href="./Units/Img32.Resamplers/_Body.htm">Img32.Resamplers</a><a href="./Units/Img32.Storage/_Body.htm">Img32.Storage</a><a href="./Units/Img32.SVG.Reader/_Body.htm">Img32.SVG.Reader</a><a href="./Units/Img32.Text/_Body.htm">Img32.Text</a><a href="./Units/Img32.Transform/_Body.htm">Img32.Transform</a><a href="./Units/Img32.Vector/_Body.htm">Img32.Vector</a>
       </div></span><a href="./Examples.htm">Examples</a><a href="./Img32.Panels/_Body.htm">Img32.Panels</a><a class="icon_container" id="icon_container" href="javascript:void(0)" onclick="hamburger()"><img id="menu_icon" src="../Menu/hamburger.svg"></a>
   </div><br><br>
 
@@ -44,19 +44,13 @@ var
   img: TImage32;
 begin
   img := TImage32.Create;
-  img.LoadFromFile('clipart.png');
-  //optionally select a resampler
-  //other than the default Bilinear one
-  img.Resampler := rBicubicResampler;
-  //angle parameters are always expressed
-  //in radians not degrees. Nevertheless
-  //many angles have predefined constants ...
-  img.Rotate(angle15);
-  img.SaveToFile('c:\temp\clipart_rot15.png');
+  img.LoadFromFile('fruit.png');
+  img.Rotate(-angle45);
+  img.SaveToFile('fruit45.png');
   img.Free;
     </pre>
   </div>
-  <div><span class="floatLeft"> <img style="vertical-align: -128px;" src="../Images/resampler1.png"> <span class="plusImg"><img src="../Images/right_arrow.png"></span> <img style="vertical-align: -128px;" src="../Images/resampler4.png"> </span>
+  <div><span class="floatLeft"> <img style="vertical-align: -128px;" src="../Images/fruit_rot45.png"> </span>
   </div>
   <div class="code">
     <pre class="brush: delphi;">
@@ -75,7 +69,7 @@ begin
   <div class="code">
     <pre class="brush: delphi;">
   uses Img32, Img32.Vector, 
-	Img32.Fmt.PNG, Img32.Transform;
+  Img32.Fmt.PNG, Img32.Transform;
   ...
   var
     img: TImage32;
@@ -88,7 +82,7 @@ begin
     dst[1].Y := img.Height div 8;
     dst[2].Y := img.Height * 7 div 8;
     if ProjectiveTransform(img, src, dst, NullRect) then
-	  img.SaveToFile('c:\temp\clouds_proj.png');
+    img.SaveToFile('c:\temp\clouds_proj.png');
     img.Free;
   end;
     </pre>
@@ -100,7 +94,7 @@ begin
   <div class="code">
     <pre class="brush: delphi;">
       uses Img32, Img32.Fmt.PNG,
-        Img32.vector, Img32.Draw, Img32.Clipper;
+        Img32.vector, Img32.Draw, Img32.Clipper2;
       ...
       var
         img: TImage32;
@@ -112,7 +106,7 @@ begin
         img := TImage32.Create;
         img.SetSize(256,256);
         rec := img.Bounds;
-        rec := Img32.Vector.InflateRect(rec, -50,-50);
+        Img32.Vector.InflateRect(rec, -50,-50);
 
         //draw a gradient filled star
         path := Star(PointD(128, 128), 50, 100, 7);
@@ -135,23 +129,27 @@ begin
   <div class="code">
     <pre class="brush: delphi;">
   uses Img32, Img32.Fmt.PNG, Img32.Text, 
-	Img32.Vector, Img32.Draw, Img32.Extra;
-	
-	...
+  Img32.Vector, Img32.Draw, Img32.Extra;
+  
+  ...
   var
-	  img: TImage32;
-	  textOutline: TPathsD;
-	  impactFont: TFontReader;
-	  impact48: TFontCache;
+    img: TImage32;
+    textOutline: TPathsD;
+    impactFont: TFontReader;
+    impact96: TFontCache;
   begin
-	img := TImage32.Create(400,150);
-	//Load Windows' Impact TTF font
-    impactFont := TFontReader.Create('Impact'); 
-	impact48 := TFontCache.Create(impactFont, DpiAware(48));
+    img := TImage32.Create(400,150);
+    // Instruct the font manager to load 
+    // the Windows' Impact TTF font
+    FontManager.Load('Impact', 800);
+    // and then get the TFontReader for this font
+    impactFont := FontManager.GetFont('Impact'); 
+    // create character outlines using font size 96
+    impact96 := TFontCache.Create(impactFont, DpiAware(96));
     try
-	  textOutline := impact48.GetTextGlyphs(
-        20, 130, 'Image32');
-	  //draw textOutline using shadow &amp; 3D effects
+      textOutline := 
+        impact96.GetTextOutline(20, 130, 'Image32');
+      //draw textOutline using shadow &amp; 3D effects
       DrawShadow(img, textOutline, frNonZero, 3);
       DrawPolygon(img, textOutline, frNonZero, $FF00DD00);
       Draw3D(img, textOutline, frNonZero, 3,4);
@@ -159,8 +157,7 @@ begin
       img.SaveToFile('c:\temp\Image32.png');
     finally
       img.Free;
-      impact48.Free;
-      impactFont.Free;
+      impact96.Free;
     end;
   end;
     </pre>
@@ -190,7 +187,7 @@ begin
   <p> Otherwise use the accompanying <a href="Img32.Panels/_Body.htm"><b>Img32.Panels</b></a> unit which contains the TImage32Panel component. </p>
   <h2 id="Auto-SeeAlso">See Also</h2>
   <p class="Body"><a href="_Body.htm"><b>Index</b></a>, <a href="Img32.Panels/_Body.htm">Img32.Panels</a>, <a href="Units/Img32.Draw/_Body.htm">Img32.Draw</a>, <a href="Units/Img32.Draw/Routines/DrawDashedLine.htm">DrawDashedLine</a>, <a href="Units/Img32.Draw/Routines/DrawLine.htm">DrawLine</a>, <a href="Units/Img32.Draw/Routines/DrawPolygon.htm">DrawPolygon</a>, <a href="Units/Img32.Vector/_Body.htm">Img32.Vector</a>, <a href="Units/Img32/Classes/TImage32/_Body.htm">TImage32</a></p>
-  <p class="Copyright" id="auto"> <br><br> Copyright &copy;2010-2023 Angus Johnson&nbsp; - &nbsp;Image32 4.2&nbsp; - &nbsp;Help file built on 26 Mar 2023 <br><br> </p>
+  <p class="Copyright" id="auto"> <br><br> Copyright &copy;2010-2023 Angus Johnson&nbsp; - &nbsp;Image32 4.6&nbsp; - &nbsp;Help file built on 18 Sep 2024 <br><br> </p>
 
 </body>
 </html>

@@ -177,8 +177,8 @@ begin
   //get 'textPath' ready to draw centered text
   textPath := arial12.GetTextOutline(0, 0, name);
   textRect := Img32.Vector.GetBoundsD(textPath);
-  textPath := OffsetPath(textPath, -textRect.Left, -textRect.Top);
-  OffsetRect(textRect, -textRect.Left, -textRect.Top);
+  textPath := TranslatePath(textPath, -textRect.Left, -textRect.Top);
+  TranslateRect(textRect, -textRect.Left, -textRect.Top);
 end;
 //------------------------------------------------------------------------------
 
@@ -230,7 +230,7 @@ var
   delta: TPointD;
 begin
   rec := RectD(0,0, Width, Height);
-  OffsetRect(rec, OuterMargin, OuterMargin);
+  TranslateRect(rec, OuterMargin, OuterMargin);
   //preparing to center text
   delta.X := (rec.Width - textRect.Width) / 2;
   delta.Y := (rec.Height - textRect.Height) / 2;
@@ -272,7 +272,7 @@ begin
     DrawEdge(Image, MakeStar(rec), $FFCCCCCC, clWhite32, dpiAwareOne*2);
   end;
   //draw the text
-  pp := OffsetPath(textPath,
+  pp := TranslatePath(textPath,
     delta.X + OuterMargin, delta.Y + OuterMargin);
   DrawPolygon(Image, pp, frNonZero, clBlack32);
 end;
