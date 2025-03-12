@@ -107,7 +107,7 @@ var
     s: string;
     n: Char;
   begin
-    //hypens etc not allowed in const names
+    //hyphens etc not allowed in const names
     len := Length(name);
     //accommodate prepended 'h' plus (?) non-alphaNum.
     SetLength(Result, len +1 + 5*(5));
@@ -393,6 +393,7 @@ begin
       AddName('feFuncG');
       AddName('feFuncR');
       AddName('feGaussianBlur');
+      AddName('feImage');
       AddName('feMerge');
       AddName('feMergeNode');
       AddName('feOffset');
@@ -419,6 +420,7 @@ begin
       AddName('hidden');
       AddName('Href');
       AddName('Id');
+      AddName('Image');
       AddName('In');
       AddName('In2');
       AddName('Intercept');
@@ -459,6 +461,7 @@ begin
       AddName('Orient');
       AddName('Out');
       AddName('Over');
+      AddName('Overflow-Wrap');
       AddName('Overlay');
       AddName('Pad');
       AddName('Path');
@@ -477,6 +480,7 @@ begin
       AddName('RefY');
       AddName('Repeat');
       AddName('Result');
+      AddName('Rotate');
       AddName('Round');
       AddName('Rx');
       AddName('Ry');
@@ -487,10 +491,12 @@ begin
       AddName('Slope');
       AddName('SourceAlpha');
       AddName('SourceGraphic');
+      AddName('space'); // xml:space
       AddName('specularExponent');
       AddName('SpreadMethod');
       AddName('Square');
       AddName('Start');
+      AddName('StartOffset');
       AddName('stdDeviation');
       AddName('Stop-Color');
       AddName('Stop-Opacity');
@@ -515,6 +521,7 @@ begin
       AddName('Text');
       AddName('Text-Anchor');
       AddName('Text-Decoration');
+      AddName('TextArea');
       AddName('TextLength');
       AddName('TextPath');
       AddName('Times');
@@ -529,6 +536,8 @@ begin
       AddName('Viewbox');
       AddName('Visibility');
       AddName('visible');
+      AddName('White-Space');
+      AddName('Word-Break');
       AddName('Width');
       AddName('X');
       AddName('X1');

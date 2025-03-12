@@ -191,7 +191,7 @@ procedure TMyVectorLayer32.Draw;
 var
   pp: TPathsD;
 begin
-  pp := TranslatePath(Paths, -Left +OuterMargin, -Top +OuterMargin);
+  pp := PathsRelativeToLayer;
   DrawShadow(Image, pp, frEvenOdd, OuterMargin, angle45, clGray32, true);
   DrawPolygon(Image, pp, frEvenOdd, BrushColor);
   Draw3D(Image, pp, frEvenOdd, DPIAware(2.5), 2);
@@ -233,9 +233,6 @@ procedure TMainForm.FormCreate(Sender: TObject);
 var
   resStream: TResourceStream;
 begin
-  //This TImage32Panel component allows very easy zooming and scrolling.
-  //(The following would also be a little simpler if TImage32Panel was
-  //installed in Delphi's IDE - using Image32's designtime package.)
   Image32Panel1 := TImage32Panel.Create(self);
   Image32Panel1.Parent := self;
   Image32Panel1.Align := alClient;
@@ -245,12 +242,13 @@ begin
 
   layeredImage := TLayeredImage32.Create;
   //layeredImage.Resampler := rNearestResampler; //draft quality (fast)
-  layeredImage.Resampler := rBiLinearResampler;  //high quality (pretty fast)
+  //layeredImage.Resampler := rBiLinearResampler;  //high quality (pretty fast)
+  layeredImage.Resampler := rWeightedBilinear;  //even higher quality (pretty fast)
   //layeredImage.Resampler := rBiCubicResampler; //best quality (slower)
 
   layeredImage.AddLayer(TLayer32); //for background hatching
 
-  fontReader := FontManager.Load('Arial Bold');
+  fontReader := FontManager.LoadFontReader('Arial Bold');
   fontCache := TFontCache.Create(fontReader, DPIAware(48));
   words := TStringList.Create;
   resStream := TResourceStream.Create(HInstance, 'WORDS', RT_RCDATA);
@@ -397,6 +395,9 @@ begin
     delayedMovePending := true;
   end else
     DelayedMouseMove(Sender, Shift, pt.X, pt.Y);
+
+//   if assigned(targetLayer) then
+//     targetLayer.Image.SaveToFile('c:\temp\tmp.png');
 end;
 //------------------------------------------------------------------------------
 
@@ -505,6 +506,7 @@ begin
   if not OpenDialog1.Execute then Exit;
   //create a raster image layer
   layer := layeredImage.AddLayer(TMyRasterLayer32) as TRotLayer32;
+  layer.Image.Resampler := rBiLinearResampler;//rNearestResampler;
   with TMyRasterLayer32(layer) do
     Init(OpenDialog1.FileName, layeredImage.MidPoint);
   SetTargetLayer(layer);

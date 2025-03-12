@@ -33,21 +33,20 @@ type
   //(See TCtrlStorageManager.EventAndPropertyHandler)
   TEventPropertyHandler1 = class(TEventPropertyHandler)
   private
-    fArial14: TFontCache;
-    fArial18: TFontCache;
-    fArialStatic: TFontCache;
-    fSvgList  : TSvgImageList32;
-    fSvgList2 : TSvgImageList32;
+    fArial14      : TFontCache;
+    fUnscaledFont : TFontCache;
+    fSvgList      : TSvgImageList32;
+    fSvgList2     : TSvgImageList32;
   public
     procedure SaveClick(Sender: TObject);
     procedure SliderClick(Sender: TObject);
     procedure Slider2Click(Sender: TObject);
     procedure ClickMe(Sender: TObject);
+    procedure CheckboxClick(Sender: TObject);
     procedure DesignModeClick(Sender: TObject);
 
     property Arial14: TFontCache read fArial14 write fArial14;
-    property Arial18: TFontCache read fArial18 write fArial18;
-    property ArialStatic: TFontCache read fArialStatic write fArialStatic;
+    property UnscaledFont: TFontCache read fUnscaledFont write fUnscaledFont;
     property svgList   : TSvgImageList32 read fSvgList write fSvgList;
     property svgList2  : TSvgImageList32 read fSvgList2 write fSvgList2;
   end;
@@ -82,7 +81,7 @@ var
   arrowCursor : HIcon;
 
 const
-  DoLoadFromStorage = true;//false;//
+  DoLoadFromStorage = false;//true;//
 
 //------------------------------------------------------------------------------
 //Miscellaneous functions
@@ -178,9 +177,9 @@ begin
 
   with eventPropHandler1 do
   begin
-    ArialStatic.FontHeight := DpiAware(14) * loadScale;
+    UnscaledFont.FontHeight := DpiAware(14) * loadScale;
     arial14.FontHeight := DpiAware(14) * loadScale * scale;
-    arial18.FontHeight := DpiAware(18) * loadScale * scale;
+    //arial18.FontHeight := DpiAware(18) * loadScale * scale;
 
     ImgSz := Round(imageSize64 * loadScale * scale);
     svgList.DefaultWidth := ImgSz;
@@ -254,6 +253,17 @@ begin
 end;
 //------------------------------------------------------------------------------
 
+procedure TEventPropertyHandler1.CheckboxClick(Sender: TObject);
+begin
+  with (Sender as TCheckboxCtrl) do
+    case TriState of
+      tsUnknown : TriState := tsYes;
+      tsYes     : TriState := tsNo;
+      tsNo      : TriState := tsUnknown;
+    end;
+end;
+//------------------------------------------------------------------------------
+
 procedure TEventPropertyHandler1.DesignModeClick(Sender: TObject);
 begin
   designing := TCheckboxCtrl(Sender).TriState = tsChecked;
@@ -266,12 +276,13 @@ end;
 
 function WindowProc(hWnd, uMsg,	wParam: WPARAM; lParam: LPARAM): Integer; stdcall;
 var
-  key : Word;
-  w,h : integer;
-  pt  : TPoint;
-  ps  : TPAINTSTRUCT;
-  dc  : HDC;
-  img : TImage32;
+  key   : Word;
+  chr   : Char;
+  w,h   : integer;
+  pt    : TPoint;
+  ps    : TPAINTSTRUCT;
+  dc    : HDC;
+  img   : TImage32;
   dx,dy : integer;
   rec   : TRectD;
   shift : TShiftState;
@@ -281,7 +292,8 @@ begin
     WM_LBUTTONDOWN:
       begin
         Result := 0;
-        clickPt := Img32.vector.Point(LoWord(lParam), HiWord(lParam));
+        clickPt :=
+          Img32.vector.Point(SmallInt(LoWord(lParam)), SmallInt(HiWord(lParam)));
         if designing then
         begin
           clickLayer := layeredImg32.GetLayerAt(clickPt);
@@ -305,12 +317,14 @@ begin
         if storageMngr.RepaintRequired then
           InvalidateRect(hWnd, nil, false);
 
-        statusCtrl.Text := storageMngr.RootCtrl.FocusedCtrl.Name;
+        if Assigned(storageMngr.RootCtrl.FocusedCtrl) then
+          statusCtrl.Text := storageMngr.RootCtrl.FocusedCtrl.Name;
       end;
     WM_MOUSEMOVE:
       begin
         Result := 0;
-        pt := Img32.vector.Point(LoWord(lParam), HiWord(lParam));
+        pt :=
+          Img32.vector.Point(SmallInt(LoWord(lParam)), SmallInt(HiWord(lParam)));
         dx := pt.X - clickPt.X; dy := pt.Y - clickPt.Y;
 
         if designing then
@@ -357,7 +371,8 @@ begin
     WM_LBUTTONUP:
       begin
         if designing then clickLayer := nil;
-        clickPt := Img32.vector.Point(LoWord(lParam), HiWord(lParam));
+        clickPt :=
+          Img32.vector.Point(SmallInt(LoWord(lParam)), SmallInt(HiWord(lParam)));
         storageMngr.MouseUp(mbLeft, WParamToShiftState(wParam), clickPt);
         if storageMngr.RepaintRequired then
           InvalidateRect(hWnd, nil, false);
@@ -365,6 +380,12 @@ begin
       end;
     WM_MOUSEWHEEL:
       begin
+        if designing then clickLayer := nil;
+        clickPt :=
+          Img32.vector.Point(SmallInt(LoWord(lParam)), SmallInt(HiWord(lParam)));
+        if storageMngr.MouseWheel(WParamToShiftState(wParam),
+          SmallInt(HiWord(wParam)), clickPt) and storageMngr.RepaintRequired then
+            InvalidateRect(hWnd, nil, false);
         Result := 0;
       end;
     WM_SYSCOMMAND:
@@ -372,6 +393,17 @@ begin
         Result := 0 else //stops beeps with Alt key combos
         Result := DefWindowProc(hWnd, uMsg, wParam, lParam);
     WM_SYSKEYDOWN,
+    WM_CHAR:
+      begin
+        if not designing then
+        begin
+          chr := Char(wParam);
+          storageMngr.KeyPress(chr);
+          if storageMngr.RepaintRequired then
+            InvalidateRect(hWnd, nil, false);
+        end;
+        Result := 0;
+      end;
     WM_KEYDOWN:
       begin
         key := Word(wParam);
@@ -478,6 +510,24 @@ begin
       Result := DefWindowProc(hWnd, uMsg, wParam, lParam);
   end;
 end;
+//------------------------------------------------------------------------------
+
+function GetUnicodeTextResouce(const resName: string; resType: PChar): UnicodeString;
+var
+  len: integer;
+  rs: TResourceStream;
+begin
+  rs := TResourceStream.Create(hInstance, resName, resType);
+  try
+    //nb: skipping unicode BOM
+    rs.Position := 2;
+    len := rs.Size div 2 -1;
+    SetLength(Result, len);
+    rs.ReadBuffer(Result[1], len *2);
+  finally
+    rs.Free;
+  end;
+end;
 
 //------------------------------------------------------------------------------
 // Setup numerouse form controls (ie. if not loading from file storage)
@@ -491,28 +541,17 @@ var
   pagePnl     : TPagePnlCtrl;
   topPnlCtrl  : TPanelCtrl;
   sliderCtrl  : TSliderCtrl;
-  lorem       : string;
-  rs          : TResourceStream;
 begin
   prevScale := 1;
   bevelSize := DPIAware(2);
-  rs := TResourceStream.CreateFromID(hInstance, 1, 'TEXT');
-  try
-    SetLength(lorem, rs.Size div 2 -1);
-    rs.Position := 2;
-    rs.ReadBuffer(lorem[1], rs.Size -2);
-  finally
-    rs.Free;
-  end;
-
   layeredImg32 := storageMngr.AddChild(TLayeredImage32) as TLayeredImage32;
 
   //outer ctrl that's an easy way to create a margin around a page ctrl
   rootCtrl := layeredImg32.AddLayer(TPanelCtrl) as TPanelCtrl;
-  rootCtrl.Font := eventPropHandler1.arialStatic;
+  rootCtrl.Font := eventPropHandler1.UnscaledFont;
   rootCtrl.CanFocus := false;
   rootCtrl.Color := clBtnFace32;
-  rootCtrl.Margin := 50;
+  rootCtrl.Margin := DPIAware(10);
 
   statusCtrl :=
     layeredImg32.AddLayer(TStatusbarCtrl, rootCtrl) as TStatusbarCtrl;
@@ -521,6 +560,7 @@ begin
     BevelHeight := DPIAware(1.5);
     Color := clNone32;
     AutoPosition := apBottom;
+    Text := 'Status bar';
   end;
 
   topPnlCtrl := layeredImg32.AddLayer(TPanelCtrl, rootCtrl) as TPanelCtrl;
@@ -587,6 +627,8 @@ begin
   // PAGE 1 ///////////////////////////////////////////////////////
   pagePnl := pageCtrl.Panel[0];
   //pagePnl.Color := $20FFFF00; //try it :)
+  pagePnl.ScrollH := pagePnl.AddChild(TScrollCtrl) as TScrollCtrl;
+  pagePnl.ScrollV := pagePnl.AddChild(TScrollCtrl) as TScrollCtrl;
 
   with layeredImg32.AddLayer(TButtonCtrl, pagePnl) as TButtonCtrl do
   begin
@@ -625,6 +667,8 @@ begin
     Text := 'Tri-state checkbox';
     SetInnerBounds(DPIAware(RectD(180, 50, 380, 70)));
     BevelHeight := bevelSize;
+    AutoState := false; // handle state changes manually in OnClick events
+    Onclick := eventPropHandler1.CheckboxClick;
   end;
 
   with layeredImg32.AddLayer(TRadioBtnCtrl, pagePnl) as TRadioBtnCtrl do
@@ -659,7 +703,7 @@ begin
   with layeredImg32.AddLayer(TEditCtrl, pagePnl) as TEditCtrl do
   begin
     SetInnerBounds(DPIAware(RectD(180, 220, 400, 250)));
-    Text := 'This is a test.';
+    Text := 'Try editing me :).';
     BevelHeight := bevelSize;
   end;
 
@@ -672,7 +716,7 @@ begin
     MaxVisibleItems := 6;
     Margin := 0;//2;
     ImageList := eventPropHandler1.svgList2;
-    ScrollV := layeredImg32.AddLayer(TScrollCtrl, nil) as TScrollCtrl;
+    ScrollV := AddChild(TScrollCtrl) as TScrollCtrl;
     ScrollV.Name := 'ListScroll';
   end;
 
@@ -682,10 +726,8 @@ begin
   //pagePnl.Color := $20FF00FF;
   //pagePnl.Margin := DPIAware(50); //margin only works for autopositioned ctrls
   //add vertical and horizontal scrollbars
-  pagePnl.ScrollH :=
-    layeredImg32.AddLayer(TScrollCtrl, pagePnl) as TScrollCtrl;
-  pagePnl.ScrollV :=
-    layeredImg32.AddLayer(TScrollCtrl, pagePnl) as TScrollCtrl;
+  pagePnl.ScrollH := pagePnl.AddChild(TScrollCtrl) as TScrollCtrl;
+  pagePnl.ScrollV := pagePnl.AddChild(TScrollCtrl) as TScrollCtrl;
   //pagePnl.ScrollH.ScrollSize := DPIAware(16);
 
   with layeredImg32.AddLayer(TLabelCtrl, pagePnl,'') as TLabelCtrl do
@@ -748,11 +790,11 @@ begin
 
   with layeredImg32.AddLayer(TMemoCtrl, pagePnl) as TMemoCtrl do
   begin
-    Text := lorem;
-    Font := eventPropHandler1.arial18;
+    Text := GetUnicodeTextResouce('LOREM', 'TEXT');
     BevelHeight := bevelSize;
     AutoPosition := apClient;
-    ScrollV := RootOwner.AddLayer(TScrollCtrl, nil) as TScrollCtrl;
+    ScrollV := AddChild(TScrollCtrl) as TScrollCtrl;
+    ScrollV.Name := 'MemoScroll';
     OuterMargin := 40;
   end;
 end;
@@ -779,7 +821,7 @@ begin
   //Create the main window and center it
   mainHdl := CreateWindow('IMG32_DEMO', 'Demo',
               WS_OVERLAPPEDWINDOW, 0, 0,
-              DpiAware(800), DpiAware(600), 0, 0, Inst, nil);
+              DpiAware(720), DpiAware(480), 0, 0, Inst, nil);
   CenterForm(mainHdl);
 
   imageSize64 := DpiAware(64.0);
@@ -789,7 +831,7 @@ begin
   sizeCursor  := LoadCursor(0, IDC_SIZEALL);
   handCursor  := LoadCursor(0, IDC_HAND);
   arrowCursor := LoadCursor(0, IDC_ARROW);
-  fontReader  := FontManager.Load('Arial');
+  fontReader  := FontManager.LoadFontReader('Arial');
 
   eventPropHandler1 := TEventPropertyHandler1.Create;
   with eventPropHandler1 do
@@ -797,8 +839,8 @@ begin
     //nb: all the following objects will be freed by eventPropHandler1
 
     arial14 := TFontCache.Create(fontReader, DPIAware(14));
-    arialStatic := TFontCache.Create(fontReader, DPIAware(14));
-    arial18 := TFontCache.Create(fontReader, DPIAware(18));
+    UnscaledFont := TFontCache.Create(fontReader, DPIAware(14));
+    //arial18 := TFontCache.Create(fontReader, DPIAware(18));
 
     svgList  := TSvgImageList32.Create;
     svgList.ResourceName := 'SVG';  //automatically loads resource
@@ -847,5 +889,5 @@ begin
   eventPropHandler1.Free;
   //nb: fontReader is freed by Img32.Text.FontManager
 
-  Halt(0);
+  //Halt(0);
 end.

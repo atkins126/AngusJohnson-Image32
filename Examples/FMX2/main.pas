@@ -19,25 +19,16 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure btnCloseClick(Sender: TObject);
-    procedure Layout1Paint(Sender: TObject; Canvas: TCanvas;
-      const ARect: TRectF);
+    procedure Layout1Paint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
     procedure TabControl1Change(Sender: TObject);
-    procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char;
-      Shift: TShiftState);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char; Shift: TShiftState);
     procedure Timer1Timer(Sender: TObject);
     procedure FormResize(Sender: TObject);
-    procedure FormActivate(Sender: TObject);
   private
     margin: integer;
-    fontHeight: double;
     clockRadius: integer;
     handWidth: double;
     secHandLen, minHandLen, hrHandLen: double;
-
-    clBackground32, clDarkRed32: TColor32;
-    clDarkMaroon32, clNearWhite32, clMidGreen32: TColor32;
-    clLightGray32, clDarkGray32: TColor32;
-
     imgMain, imgClockface: TImage32;
     essay: string;
     procedure DrawTextTab;
@@ -52,21 +43,29 @@ var
 implementation
 
 {$R *.fmx}
-
 {$R font.res}
-{$R image.res}
+{$R RCData.res}
 
 {$ZEROBASEDSTRINGS OFF}
 
 uses
   Img32.Vector, Img32.Draw, Img32.Extra, Img32.FMX,
-  Img32.Text, Img32.Clipper2;
+  Img32.Text, Img32.TextChunks, Img32.Clipper2;
+
+const
+  clDarkRed32      : TColor32 = $FFCC0000;
+  clDarkMaroon32   : TColor32 = $FF400000;
+  clMidGreen32     : TColor32 = $FF00A000;
+  clBackground32   : TColor32 = $FFF8F8F8;
+  clNearWhite32    : TColor32 = $FFF4F4F4;
+  clLightGray32    : TColor32 = $FFB0B0B0;
+  clDarkGray32     : TColor32 = $FF999999;
 
 //------------------------------------------------------------------------------
 // Miscellaneous functions
 //------------------------------------------------------------------------------
 
-function OffsetRectF(const rec: TRectF; x, y: single): TRectF;
+function TranslateRectF(const rec: TRectF; x, y: single): TRectF;
 begin
   result.Left := rec.Left + x;
   result.Right := rec.Right + x;
@@ -75,20 +74,51 @@ begin
 end;
 //------------------------------------------------------------------------------
 
-procedure CopyImage32ToFmxBitmap(img: TImage32; bmp: TBitmap);
+procedure CopyImage32ToFmxCanvas(img: TImage32; canvas: TCanvas; dstRec: TRectF);
 var
-  src, dst: TBitmapData;
+  i: integer;
+  tmpBitmap: TBitmap;
+  srcBD, dstBD: TBitmapData;
 begin
-  src := TBitMapData.Create(img.Width, img.Height, TPixelFormat.BGRA);
-  src.Data := img.PixelBase;
-  src.Pitch := img.Width * 4;
-  if not Assigned(img) or not Assigned(bmp) then Exit;
-  bmp.SetSize(img.Width, img.Height);
-  if bmp.Map(TMapAccess.Write, dst) then
+  if not Assigned(img) then Exit;
+  tmpBitmap := TBitmap.Create(img.Width, img.Height);
   try
-    dst.Copy(src);
+    srcBD := TBitMapData.Create(img.Width, img.Height, TPixelFormat.BGRA);
+    srcBD.Data := img.PixelBase;
+    srcBD.Pitch := img.Width * 4;
+    if tmpBitmap.Map(TMapAccess.Write, dstBD) then // creates a map to 'dst'
+    try
+      //dstBD.Copy(srcBD);
+      for i := 0 to dstBD.Height - 1 do
+        Move(srcBD.GetScanline(i)^, dstBD.GetScanline(i)^, dstBD.BytesPerLine);
+    finally
+      tmpBitmap.Unmap(dstBD);
+    end;
+
+    // scale draw tmpBitmap onto the canvas
+    Canvas.Lock;
+    Canvas.DrawBitmap(tmpBitmap, RectF(0,0,img.Width, img.Height), dstRec, 1);
+    Canvas.UnLock;
   finally
-    bmp.Unmap(dst);
+    tmpBitmap.Free;
+  end;
+end;
+//------------------------------------------------------------------------------
+
+function TextResourceToString(const resName: string;
+  resType: PChar; encoding: TEncoding): string;
+var
+  rs: TResourceStream;
+  sl: TStringList;
+begin
+  rs := TResourceStream.Create(hInstance, resName, resType);
+  sl := TStringList.Create;
+  try
+    sl.LoadFromStream(rs, encoding);
+    Result := sl.Text;
+  finally
+    sl.Free;
+    rs.Free;
   end;
 end;
 
@@ -97,40 +127,20 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TMainForm.FormCreate(Sender: TObject);
-var
-  rs: TResourceStream;
 begin
-  margin := DPIAware(12);
-
-  clDarkRed32     := $FFCC0000;
-  clDarkMaroon32  := $FF400000;
-  clMidGreen32    := $FF00A000;
-  clBackground32  := $FFF8F8F8;
-  clNearWhite32   := $FFF4F4F4;
-  clLightGray32   := $FFB0B0B0;
-  clDarkGray32    := $FF999999;
-{$IFDEF ANDROID}
-  clDarkRed32 := SwapRedBlue(clDarkRed32);
-  clDarkMaroon32 := SwapRedBlue(clDarkMaroon32);
-{$ENDIF}
+  // load 2 fonts, 'regular' and 'bold' ...
+  FontManager.LoadFromResource('FONT_NSR', RT_RCDATA);
+  FontManager.LoadFromResource('FONT_NSB', RT_RCDATA);
 
   imgMain      := TImage32.Create;
   imgClockface := TImage32.Create;
   margin := DPIAware(20);
 
-  rs := TResourceStream.Create(hInstance, 'ESSAY', RT_RCDATA);
-  with TStringStream.Create('', TEncoding.Unicode) do
-  try
-    LoadFromStream(rs);
-    essay := ReadString(Size);
-  finally
-    free;
-    rs.Free;
-  end;
+  essay := TextResourceToString('ESSAY', RT_RCDATA, TEncoding.Unicode);
   essay := StringReplace(essay, '\n', #10, [rfReplaceAll]);
 
   Layout1.Scale.Point := PointF(1/DpiAwareOne,1/DpiAwareOne);
-  fontHeight := DPIAware(13);
+  TabControl1Change(nil);
 end;
 //------------------------------------------------------------------------------
 
@@ -143,107 +153,77 @@ end;
 
 procedure TMainForm.DrawTextTab;
 var
-  i, innerMargin, w, h, lineCnt: integer;
-  rectangle: TPathD;
-  txtPaths: TPathsD;
+  innerMargin, halfInnerRecWidth: integer;
   outerRec, innerRec, tmpRec, imageRec: TRect;
-
-  wordList: TWordInfoList;
-  pageMetrics: TTextPageMetrics;
-  imgBooks: TImage32;
-  noto14Cache: TFontCache;
-  notoSansReg : TFontReader;
-  useClearType: Boolean;
+  imgHeight     : integer;
+  rectangle     : TPathD;
+  chunkMetrics  : TPageTextMetrics;
+  regularFR     : TFontReader;
+  regularCache  : TFontCache;
+  chunkedText   : TChunkedText;
+  imgBooks      : TImage32;
 begin
   Timer1.Enabled := false;
-  //IMPORTANT: we need to avoid any screen scaling
-  //as it causes unacceptible blurring (especially of text) ...
+
   outerRec := Img32.Vector.Rect(0, 0,
     DPIAware(ClientWidth) - margin*2,
     Round(DPIAware(ClientHeight - TabControl1.TabHeight)) -margin*2);
+  imgMain.SetSize(outerRec.Width, outerRec.Height, clWhite32);
 
-  imgMain.SetSize(outerRec.Width, outerRec.Height);
-  //color fill the base image and give it a border ...
-  imgMain.Clear(clWhite32);
-
-  useClearType := fontHeight < 14;
   innermargin := margin div 2;
 
-  notoSansReg := TFontReader.CreateFromResource('FONT_NSR', RT_RCDATA);
-  noto14Cache := TFontCache.Create(notoSansReg, fontHeight);
+  tmpRec := outerRec;
+  Img32.Vector.InflateRect(tmpRec, -1, -1);
+  rectangle := Img32.Vector.Rectangle(tmpRec);
+  DrawLine(imgMain, rectangle, 2, clDarkRed32, esPolygon);
+
+  innerRec := outerRec;
+  Img32.Vector.InflateRect(innerRec, -innermargin, -innermargin);
+  halfInnerRecWidth := RectWidth(innerRec) div 2; //half innerRec.width
+
+  //load the 'Mr Darcy' image and scale it to a useful size ...
+  imgBooks := TImage32.Create();
   try
-    if not notoSansReg.IsValidFontFormat then Exit;
+    imgBooks.LoadFromResource('DARCY', RT_RCDATA);
+    //draw an image at the top right
+    imgBooks.Scale(halfInnerRecWidth / imgBooks.Width);
+    imgHeight := imgBooks.Height;
+    imageRec := imgBooks.Bounds;
+    TranslateRect(imageRec, imgBooks.Width + innermargin, innermargin);
+    imgMain.CopyBlend(imgBooks, imgBooks.Bounds, imageRec, BlendToOpaque);
+  finally
+    imgBooks.Free;
+  end;
 
-    tmpRec := outerRec;
-    Img32.Vector.InflateRect(tmpRec, -1, -1);
-    rectangle := Img32.Vector.Rectangle(tmpRec);
-    DrawLine(imgMain, rectangle, 2, clDarkRed32, esPolygon);
+  regularFR := FontManager.GetBestMatchFont([]);
+  regularCache := TFontCache.Create(regularFR, DPIAware(14));
+  chunkedText := TChunkedText.Create;
+  try
 
-    innerRec := outerRec;
-    Img32.Vector.InflateRect(innerRec, -innermargin, -innermargin);
-    w := RectWidth(innerRec) div 2; //half innerRec.width
+    //get the rect to contain text on the left ...
+    tmpRec := innerRec;
+    tmpRec.Right := tmpRec.Left + halfInnerRecWidth - innerMargin;
+    tmpRec.Bottom :=
+      tmpRec.Top + imgHeight + Floor(regularCache.LineHeight);
 
-    //load an image and scale it to a useful size ...
-    imgBooks := TImage32.Create();
-    try
-      imgBooks.LoadFromResource('PNGIMAGE', RT_RCDATA);
-      //draw an image at the top right
-      imgBooks.Scale(w / imgBooks.Width);
-      imageRec := imgBooks.Bounds;
-      TranslateRect(imageRec, imgBooks.Width + innermargin, innermargin);
-      imgMain.CopyBlend(imgBooks,
-        imgBooks.Bounds, imageRec, BlendToOpaque);
-      h := imgBooks.Height;
-    finally
-      imgBooks.Free;
-    end;
-
-    //draw text that fits to left of the image, then remaining text
-    //in the space below the image but using the full 'page' width.
-
-    //get rect to left of image
-    tmpRec := Img32.Vector.Rect(innerMargin, innerMargin, w,
-      h + innerMargin);
-
-    //break text string into a TWordInfoList and use that to get the
-    //metrics of how many lines of text will fit on left of image
-    wordList := TWordInfoList.Create;
-    try
-      wordList.SetText(essay, noto14Cache);
-      pageMetrics := GetPageMetrics(RectWidth(tmpRec), wordList);
-      //calculate lines that will fit on left of image
-      lineCnt := Trunc(RectHeight(tmpRec) / noto14Cache.LineHeight);
-      //now get the text glyph outlines and draw them
-      txtPaths := noto14Cache.GetTextOutline(tmpRec,
-        wordList, pageMetrics, taJustify, 0, lineCnt);
-      if useClearType then
-        DrawPolygon_ClearType(imgMain, txtPaths, frNonZero, clBlack32) else
-        DrawPolygon(imgMain, txtPaths, frNonZero, clBlack32);
-
-      inc(lineCnt);
-      if lineCnt < pageMetrics.lineCount then
-      begin
-        //getting the index of the word starting the next line
-        i := pageMetrics.wordListOffsets[lineCnt];
-        //delete all the words just drawn from wordList
-        wordList.DeleteRange(0, i-1);
-        //get new pagemetrics using full 'page' width
-        innerRec.Top := tmpRec.Top + Round(lineCnt * noto14Cache.LineHeight);
-        pageMetrics := GetPageMetrics(RectWidth(innerRec),wordList);
-        //now get the text glyph outlines and draw them
-        txtPaths := noto14Cache.GetTextOutline(innerRec,
-          wordList, pageMetrics, taJustify, 0, -1);
-        if useClearType then
-          DrawPolygon_ClearType(imgMain, txtPaths, frNonZero, clBlack32) else
-          DrawPolygon(imgMain, txtPaths, frNonZero, clBlack32);
-      end;
-    finally
-      wordList.Free;
+    chunkedText.SetText(essay, regularCache);
+    // draw the text to the left of the image
+    chunkMetrics := chunkedText.DrawText(imgMain, tmpRec, taJustify, tvaTop);
+    // if there's text that didn't fit on the left of the image, then
+    // draw the remaining text below the image
+    if (chunkMetrics.nextStartPos.X < chunkedText.Count) then
+    begin
+      with chunkMetrics do
+        tmpRec.Top := tmpRec.Top + Ceil(visibleLines * lineHeight);
+      tmpRec.Right := innerRec.Right;
+      tmpRec.Bottom := innerRec.Bottom;
+      chunkedText.DrawText(imgMain, tmpRec, taJustify, tvaTop,
+        chunkMetrics.nextStartPos, chunkMetrics.lineHeight);
     end;
 
   finally
-    noto14Cache.Free;
-    notoSansReg.free;
+    chunkedText.Free;
+    regularCache.Free;
   end;
   Layout1.Repaint;
 end;
@@ -262,7 +242,8 @@ var
   ir         : TImageRenderer;
   lgr        : TLinearGradientRenderer;
   fontReader : TFontReader;
-  font : TFontCache;
+  regCache   : TFontCache;
+  boldCache  : TFontCache;
   numGlyphs  : array[1..12] of TPathsD;
 begin
   imgClockface.SetSize(
@@ -364,27 +345,22 @@ begin
   DrawPolygon(imgClockface, path2, frEvenOdd, clWhite32);
   mp := MidPoint(recD);
 
-  //get the Noto Sans Regular font from the registry
-  fontReader := TFontReader.CreateFromResource('FONT_NSR', RT_RCDATA);
-  //create a glyph cache for the font with font height = clockRadius / 13
-  font := TFontCache.Create(fontReader, clockRadius / 13);
+  fontReader := FontManager.GetBestMatchFont([]); // the 'regular' fontreader
+  regCache := TFontCache.Create(fontReader, clockRadius / 13);
+  fontReader := FontManager.GetBestMatchFont([msBold]); // the 'bold' fontreader
+  boldCache := TFontCache.Create(fontReader, regCache.FontHeight * 1.5);
   try
-    //DRAW THE "MAKER'S MARK"
+    // draw the "maker's mark"
     recI := Img32.Vector.Rect(recD);
     recI.Bottom := recI.Top + clockRadius;
-    DrawText(imgClockface, recI, 'angusj', taCenter, tvaMiddle, font);
+    DrawText(imgClockface, RectD(recI), 'angusj', regCache);
 
-    fontReader.LoadFromResource('FONT_NSB', RT_RCDATA); //noto sans bold
-    font.FontHeight := font.FontHeight * 1.5;
-
-    //GET CLOCK NUMBERS (AGAIN MAKING THE FONT LARGER)
-    font.FontHeight := font.FontHeight * 1.4;
+    // Get the glyphs for the numbers 1 .. 12
     for i := 1 to 12 do
-      numGlyphs[i] := font.GetTextOutline(0,0,inttostr(i));
-
+      numGlyphs[i] := boldCache.GetTextOutline(0,0,inttostr(i));
   finally
-    fontReader.Free;
-    font.Free;
+    regCache.Free;
+    boldCache.Free;
   end;
 
   pt.X := mp.X;
@@ -494,7 +470,6 @@ begin
   Timer1.Interval := Round(1000*(1 - abs(t - Round(t))));
 
   //UPDATE CLOCK HANDS
-
   imgMain.Assign(imgClockface);
   mp := PointD(imgMain.Width/2, imgMain.Height/2);
 
@@ -520,25 +495,13 @@ begin
 end;
 //------------------------------------------------------------------------------
 
-procedure TMainForm.Layout1Paint(Sender: TObject; Canvas: TCanvas;
-  const ARect: TRectF);
+procedure TMainForm.Layout1Paint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
 var
-  tmpBitmap: TBitmap;
   srcRec, dstRec: TRectF;
 begin
   srcRec := RectF(0,0,imgMain.Width,imgMain.Height);
-  dstRec := OffsetRectF(srcRec,
-    (Layout1.Width - imgMain.Width)/2, margin);
-
-  tmpBitmap := TBitmap.Create;
-  try
-    CopyImage32ToFmxBitmap(imgMain,tmpBitmap);
-    Canvas.Lock;
-    Canvas.DrawBitmap(tmpBitmap, srcRec, dstRec, 1);
-    Canvas.UnLock;
-  finally
-    tmpBitmap.Free;
-  end;
+  dstRec := TranslateRectF(srcRec, (layout1.Width - imgMain.Width)/2, margin);
+  CopyImage32ToFmxCanvas(imgMain, Canvas, dstRec);
 end;
 //------------------------------------------------------------------------------
 
@@ -546,12 +509,6 @@ procedure TMainForm.FormResize(Sender: TObject);
 begin
   if Visible then
     TabControl1Change(nil);
-end;
-//------------------------------------------------------------------------------
-
-procedure TMainForm.FormActivate(Sender: TObject);
-begin
-  TabControl1Change(nil);
 end;
 //------------------------------------------------------------------------------
 
@@ -563,8 +520,8 @@ begin
 end;
 //------------------------------------------------------------------------------
 
-procedure TMainForm.FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char;
-  Shift: TShiftState);
+procedure TMainForm.FormKeyDown(Sender: TObject;
+  var Key: Word; var KeyChar: Char; Shift: TShiftState);
 begin
   if key = 27 then Close;
 end;

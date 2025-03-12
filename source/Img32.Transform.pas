@@ -2,12 +2,12 @@ unit Img32.Transform;
 
 (*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Version   :  4.6                                                             *
-* Date      :  18 September 2024                                               *
-* Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2019-2024                                         *
+* Version   :  4.8                                                             *
+* Date      :  16 January 2025                                                 *
+* Website   :  https://www.angusj.com                                          *
+* Copyright :  Angus Johnson 2019-2025                                         *
 * Purpose   :  Affine and projective transformation routines for TImage32      *
-* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
+* License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************)
 
 interface
@@ -106,15 +106,7 @@ type
   public
     procedure Reset; overload; {$IFDEF INLINE} inline; {$ENDIF}
     procedure Reset(c: TColor32; w: Integer = 1); overload; {$IFDEF INLINE} inline; {$ENDIF}
-    procedure Add(c: TColor32; w: Integer); overload;
-      {$IFDEF FPC}
-        {$IFDEF INLINE} inline; {$ENDIF}
-      {$ELSE}
-        // Delphi 2006-2009 bug with INLINE ("incompatible type")
-        {$IF CompilerVersion > 20.0}
-          {$IFDEF INLINE} inline; {$ENDIF}
-        {$IFEND}
-      {$ENDIF}
+    procedure Add(c: TColor32; w: Integer); overload; {$IFDEF INLINE_COMPATIBLE} inline; {$ENDIF}
     procedure Add(c: TColor32); overload; {$IFDEF INLINE} inline; {$ENDIF}
     procedure Add(const other: TWeightedColor); overload;
       {$IFDEF INLINE} inline; {$ENDIF}
@@ -122,8 +114,8 @@ type
     procedure Subtract(c: TColor32); overload; {$IFDEF INLINE} inline; {$ENDIF}
     procedure Subtract(const other: TWeightedColor); overload;
       {$IFDEF INLINE} inline; {$ENDIF}
-    function AddSubtract(addC, subC: TColor32): Boolean; {$IFDEF INLINE} inline; {$ENDIF}
-    function AddNoneSubtract(c: TColor32): Boolean; {$IFDEF INLINE} inline; {$ENDIF}
+    function AddSubtract(addC, subC: TColor32): Boolean; {$IFDEF INLINE_COMPATIBLE} inline; {$ENDIF}
+    function AddNoneSubtract(c: TColor32): Boolean; {$IFDEF INLINE_COMPATIBLE} inline; {$ENDIF}
     procedure AddWeight(w: Integer); {$IFDEF INLINE} inline; {$ENDIF}
     property AddCount: Integer read fAddCount;
     property Color: TColor32 read GetColor;
@@ -475,7 +467,9 @@ begin
   // https://stackoverflow.com/a/32125700/359538
   X := Sqrt(Sqr(mat[0,0]) + Sqr(mat[0,1]));
   //Y := Sqrt(Sqr(mat[1,0]) + Sqr(mat[1,1]));
-  Y := Abs((mat[0,0] * mat[1,1] - mat[1,0] * mat[0,1]) / X);
+  if IsZero(X) then
+    Y := 0 else
+    Y := Abs(mat[0,0] * mat[1,1] - mat[1,0] * mat[0,1]) / X;
 end;
 //------------------------------------------------------------------------------
 
@@ -1196,7 +1190,7 @@ end;
 
 procedure TWeightedColor.Add(c: TColor32; w: Integer);
 var
-  a: Cardinal;
+  a: Int64;
 begin
   inc(fAddCount, w);
   a := Byte(c shr 24);
@@ -1214,7 +1208,7 @@ end;
 procedure TWeightedColor.Add(c: TColor32);
 // Optimized for w=1
 var
-  a: Cardinal;
+  a: Int64;
 begin
   inc(fAddCount);
   a := Byte(c shr 24);
@@ -1238,7 +1232,7 @@ end;
 
 procedure TWeightedColor.Subtract(c: TColor32; w: Integer);
 var
-  a: Cardinal;
+  a: Int64;
 begin
   dec(fAddCount, w);
   a := w * Byte(c shr 24);
@@ -1253,7 +1247,7 @@ end;
 procedure TWeightedColor.Subtract(c: TColor32);
 // Optimized for w=1
 var
-  a: Cardinal;
+  a: Int64;
 begin
   dec(fAddCount);
   a := Byte(c shr 24);
@@ -1277,7 +1271,7 @@ end;
 
 function TWeightedColor.AddSubtract(addC, subC: TColor32): Boolean;
 var
-  a: Cardinal;
+  a: Int64;
 begin
   // add+subtract => fAddCount stays the same
 
@@ -1309,7 +1303,7 @@ end;
 
 function TWeightedColor.AddNoneSubtract(c: TColor32): Boolean;
 var
-  a: Cardinal;
+  a: Int64;
 begin
   // add+subtract => fAddCount stays the same
 
