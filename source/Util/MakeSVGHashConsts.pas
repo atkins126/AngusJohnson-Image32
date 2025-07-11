@@ -110,7 +110,7 @@ var
     //hyphens etc not allowed in const names
     len := Length(name);
     //accommodate prepended 'h' plus (?) non-alphaNum.
-    SetLength(Result, len +1 + 5*(5));
+    SetLength(Result, len + 1 + 5 * (5));
     Result[1] := 'h';
     j := 2;
     for i := 1 to len do
@@ -566,7 +566,7 @@ begin
       begin
         hash := GetHashedNameCaseSens(slNames[i]);
         sl.Add(Format('  %-28s= $%8.8x;    // %s',
-          [TidyName(slNames[i])+'_', hash, slNames[i]]));
+          [TidyName(slNames[i]) + '_', hash, slNames[i]]));
       end else
       begin
         hash := GetHashedName(slNames[i]);

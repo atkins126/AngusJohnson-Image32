@@ -3,7 +3,7 @@ unit Img32.TextChunks;
 (*******************************************************************************
 * Author    :  Angus Johnson                                                   *
 * Version   :  4.8                                                             *
-* Date      :  11 March 2025                                                   *
+* Date      :  9 May 2025                                                      *
 * Website   :  https://www.angusj.com                                          *
 * Copyright :  Angus Johnson 2019-2025                                         *
 * Purpose   :  Manages navigating, formatting and displaying text.             *
@@ -40,8 +40,6 @@ type
     owner         : TChunkedText;
     index         : integer;
     length        : integer;        // text length
-//    left          : double;
-//    top           : double;
     width         : double;         // pixel width
     height        : double;         // pixel height
     backColor     : TColor32;
@@ -84,7 +82,7 @@ type
   // single chunk is too wide for the supplied rect.) That value is the negated
   // character offset of that chunk. When consecutive negative values are
   // encountered, the referenced text chunk will be the first non-negative
-  // value that preceeds the negative values. If the very first startOfLineIdx
+  // value that precedes the negative values. If the very first startOfLineIdx
   // value is negative, the referenced text chunk is indicated by startPos.X.
 
   // TChunkedText: A font formatted list of text 'chunks' (usually space
@@ -160,12 +158,18 @@ type
       read fDrawChunkEvent write fDrawChunkEvent;
   end;
 
+function GetLineIndexFromChunkIdx(const pageMetrics: TPageTextMetrics;
+  chunkIdx: integer): integer;
+function GetChunkIdxAtStartOfLine(const pageMetrics: TPageTextMetrics;
+  lineIdx: integer): integer;
+
 implementation
 
 resourcestring
   rsInvalidChunk            = 'TChunkedText: invalid chunk';
   rsChunkedTextRangeError   = 'TChunkedText: range error.';
   rsChunkedTextFontError    = 'TChunkedText: invalid font error.';
+  rsPageTextMetricsError    = 'TPageTextMetrics: range error';
 
 const
   SPACE   = #32;
@@ -175,6 +179,25 @@ type
   TFontCacheHack = class(TFontCache);
 
 //------------------------------------------------------------------------------
+
+function GetLineIndexFromChunkIdx(const pageMetrics: TPageTextMetrics;
+  chunkIdx: integer): integer;
+begin
+  Result := pageMetrics.totalLines -1;
+  while (Result > 0) and (chunkIdx < pageMetrics.startOfLineIdx[Result]) do
+    Dec(Result);
+end;
+//------------------------------------------------------------------------------
+
+function GetChunkIdxAtStartOfLine(const pageMetrics: TPageTextMetrics;
+  lineIdx: integer): integer;
+begin
+  if (lineIdx < 0) or (lineIdx >= pageMetrics.totalLines) then
+    Raise Exception.Create(rsPageTextMetricsError);
+  Result := pageMetrics.startOfLineIdx[lineIdx];
+end;
+//------------------------------------------------------------------------------
+
 function IsCorrectPosOrder(const pt1, pt2: TPoint): Boolean;
 begin
   if pt1.X <> pt2.X then
@@ -249,7 +272,7 @@ end;
 
 function TTextChunk.IsBlankSpaces: Boolean;
 begin
-  Result := text[1] = SPACE;
+  Result := (text[1] = SPACE);
 end;
 //------------------------------------------------------------------------------
 
@@ -261,7 +284,14 @@ end;
 
 function TTextChunk.IsText: Boolean;
 begin
-  Result := not CharInSet(text[1], [SPACE, NEWLINE]);
+  // CharInSet is slow in Win32 and generates even slower code for Win64
+  //Result := not CharInSet(text[1], [SPACE, NEWLINE]);
+  case text[1] of
+    SPACE, NEWLINE:
+      Result := False;
+  else
+    Result := True;
+  end;
 end;
 //------------------------------------------------------------------------------
 
@@ -544,7 +574,14 @@ begin
 
   for i := startIdx to endIdx do
     TTextChunk(fList.Items[i]).Free;
+
+{$IF defined(FPC) or not defined(LIST_DELETERANGE)}
+  for i := endIdx-startIdx +1 downto startIdx do
+    fList.Delete(i);
+{$ELSE}
   fList.DeleteRange(startIdx, endIdx-startIdx +1);
+{$IFEND}
+
   // reindex
   for i := startIdx to fList.Count -1 do
     TTextChunk(fList.Items[i]).index := i;
@@ -878,7 +915,10 @@ begin
   if (EndChunkPos.X >= Count) then EndChunkPos := Types.Point(Count, 0);
   if (startingChunkPos.X < 0) then startingChunkPos := NullPoint;
   if (Count = 0) or not IsCorrectPosOrder(startingChunkPos, EndChunkPos) then
+  begin
+    SetResultLength(1);
     Exit;
+  end;
 
   Result.visibleLines := -1;
   lh := lineHeightOverride;
@@ -893,7 +933,7 @@ begin
   begin
     chnk := Chunk[currentPos.X];
     if currentPos.Y >= chnk.length then
-      raise Exception.Create('oops!');
+      currentPos.Y := chnk.length;
     priorSplitWidth := chnk.glyphOffsets[startingChunkPos.Y];
     // start by finishing a partial text chunk
     AddPartChunk;
@@ -926,12 +966,12 @@ begin
         AddLine;
         // don't allow spaces to wrap to the front of the following line
 
-        while chnk.IsBlankSpaces and (chnk.index < EndChunkPos.X) do
-          chnk := chnk.Next;
-        currentPos.X := chnk.index;
-//        while (currentPos.X < EndChunkPos.X) and
-//          self.chunk[currentPos.X].IsBlankSpaces do
-//            inc(currentPos.X);
+        while Assigned(chnk) and chnk.IsBlankSpaces and
+          (chnk.index < EndChunkPos.X) do
+            chnk := chnk.Next;
+        if not Assigned(chnk) then
+          currentPos.X := EndChunkPos.X else
+          currentPos.X := chnk.index;
         chunkIdxAtStartOfLine  := currentPos.X;
         pseudoIdxAtStartOfLine := currentPos.X;
       end;
@@ -1028,7 +1068,7 @@ begin
   if chnk.index > startPos.X then
     chunkPos.Y := 0 else
     chunkPos.Y := startPos.Y;
-  while x2 >= chnk.glyphOffsets[chunkPos.Y+1] do Inc(chunkPos.Y);
+  while x2 >= chnk.glyphOffsets[chunkPos.Y + 1] do Inc(chunkPos.Y);
 
   if (chunkPos.X < EndPos.X) or
     ((chunkPos.X = EndPos.X) and (chunkPos.Y < EndPos.Y)) then
@@ -1051,7 +1091,7 @@ begin
 
   i := 0;
   while i < ptm.visibleLines - 1 do
-    if chunkIdx < ptm.startOfLineIdx[i+1] then Break
+    if chunkIdx < ptm.startOfLineIdx[i + 1] then Break
     else inc(i);
   pos := GetRealChunkPosFromLineIdx(ptm, i);
   chnk := Chunk[pos.X];
@@ -1125,7 +1165,7 @@ begin
   chrOff := currPos.Y;
 
   case textAlignV of
-    tvaMiddle: y := top + (RecHeight - totalHeight) /2 -1;
+    tvaMiddle: y := top + (RecHeight - totalHeight) / 2 - 1;
     tvaBottom: y := rec.bottom - totalHeight + chnk.ascent;
     else y := top;
   end;
@@ -1135,12 +1175,12 @@ begin
   currPos := GetRealChunkPosFromLineIdx(Result, 0);
 
   // for each visible line
-  highI := Result.visibleLines -1;
+  highI := Result.visibleLines - 1;
   for i := 0 to highI do
   begin
     if i = highI then
       endPos := Result.nextStartPos else
-      endPos := GetRealChunkPosFromLineIdx(Result, i +1);
+      endPos := GetRealChunkPosFromLineIdx(Result, i + 1);
 
     if textAlign = taJustify then
       spcDx := Result.justifyDeltas[i] else

@@ -71,6 +71,8 @@ type
     MnuShadow0: TMenuItem;
     MnuShadow5: TMenuItem;
     MnuShadow10: TMenuItem;
+    CopytoClipboard1: TMenuItem;
+    N6: TMenuItem;
     procedure mnuExitClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -94,6 +96,7 @@ type
     procedure AddImage1Click(Sender: TObject);
     procedure ChangeColor1Click(Sender: TObject);
     procedure mnuHideHatchingClick(Sender: TObject);
+    procedure CopytoClipboard1Click(Sender: TObject);
   private
     layeredImg32  : TLayeredImage32;
     clickedLayer  : TLayer32;
@@ -255,21 +258,21 @@ begin
     DrawPolygon(Image, p, frNonZero, clBtnFace32);
     //and draw a pale 3D gray frame
     p := MakeEllipse(Rect(rec));
-    DrawEdge(Image, p, clWhite32, $FFCCCCCC, dpiAwareOne*2);
+    DrawEdge(Image, p, clWhite32, $FFCCCCCC, dpiAwareOne * 2);
     img32.Vector.InflateRect(rec, -FrameWidth, -FrameWidth);
     p := MakeEllipse(Rect(rec));
     DrawPolygon(Image, p, frNonZero, BrushColor);
-    DrawEdge(Image, Ellipse(rec), $FFCCCCCC, clWhite32, dpiAwareOne*2);
+    DrawEdge(Image, Ellipse(rec), $FFCCCCCC, clWhite32, dpiAwareOne * 2);
   end
   else //name = 'star'
   begin
     p := MakeStar(rec);
     DrawShadow(Image, p, frNonZero, OuterMargin, angle45, $33000000);
     DrawPolygon(Image, p, frNonZero, clBtnFace32);
-    DrawEdge(Image, MakeStar(rec), clWhite32, $FFCCCCCC, dpiAwareOne*2);
+    DrawEdge(Image, MakeStar(rec), clWhite32, $FFCCCCCC, dpiAwareOne * 2);
     img32.Vector.InflateRect(rec, -FrameWidth, -FrameWidth);
     DrawPolygon(Image, MakeStar(rec), frNonZero, BrushColor);
-    DrawEdge(Image, MakeStar(rec), $FFCCCCCC, clWhite32, dpiAwareOne*2);
+    DrawEdge(Image, MakeStar(rec), $FFCCCCCC, clWhite32, dpiAwareOne * 2);
   end;
   //draw the text
   pp := TranslatePath(textPath,
@@ -350,6 +353,26 @@ end;
 procedure TMainForm.WMERASEBKGND(var message: TMessage);
 begin
   message.Result := 0; //speed up drawing
+end;
+//------------------------------------------------------------------------------
+
+procedure TMainForm.CopytoClipboard1Click(Sender: TObject);
+begin
+  // GetMergedImage's True parameter hides design layers
+  // (ie the hatched background and any layer sizing buttons)
+  layeredImg32.GetMergedImage(true).CopyToClipBoard;
+end;
+//------------------------------------------------------------------------------
+
+procedure TMainForm.mnuExitClick(Sender: TObject);
+begin
+  if Assigned(targetLayer) then
+  begin
+    if targetLayer.Parent is TRotLayer32 then
+      SetTargetLayer(TRotLayer32(targetLayer.Parent)) else
+      SetTargetLayer(nil);
+  end else
+    Close;
 end;
 //------------------------------------------------------------------------------
 
@@ -598,18 +621,6 @@ procedure TMainForm.pnlMainMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
   clickedLayer := nil;
-end;
-//------------------------------------------------------------------------------
-
-procedure TMainForm.mnuExitClick(Sender: TObject);
-begin
-  if Assigned(targetLayer) then
-  begin
-    if targetLayer.Parent is TRotLayer32 then
-      SetTargetLayer(TRotLayer32(targetLayer.Parent)) else
-      SetTargetLayer(nil);
-  end else
-    Close;
 end;
 //------------------------------------------------------------------------------
 
